@@ -131,7 +131,14 @@ void RPCService::manage_service(const string address) {
   }
 
   while (active_) {
-    zmq_poll(items, 1, 0);
+    // Set poll timeout based on whether there are outgoing messages to
+    // send. If there are messages to send, don't let the poll block at all.
+    // If there no messages to send, let the poll block for 1 ms.
+    int poll_timeout = 0;
+    if (request_queue_->size() == 0) {
+      poll_timeout = 1;
+    }
+    zmq_poll(items, 1, poll_timeout);
     if (items[0].revents & ZMQ_POLLIN) {
       // TODO: Balance message sending and receiving fairly
       // Note: We only receive one message per event loop iteration
@@ -261,6 +268,8 @@ void RPCService::receive_message(
         connections_containers_map.emplace(
             connection_id,
             std::pair<VersionedModelId, int>(model, cur_replica_id));
+
+        TaskExecutionThreadPool::create_queue(model, cur_replica_id);
         zmq_connection_id += 1;
       }
     } break;
@@ -287,10 +296,12 @@ void RPCService::receive_message(
         std::pair<VersionedModelId, int> container_info =
             container_info_entry->second;
 
-        TaskExecutionThreadPool::submit_job(new_response_callback_, response);
-        TaskExecutionThreadPool::submit_job(container_ready_callback_,
-                                            container_info.first,
-                                            container_info.second);
+        VersionedModelId vm = container_info.first;
+        int replica_id = container_info.second;
+        TaskExecutionThreadPool::submit_job(vm, replica_id,
+                                            new_response_callback_, response);
+        TaskExecutionThreadPool::submit_job(
+            vm, replica_id, container_ready_callback_, vm, replica_id);
 
         response_queue_->push(response);
       }

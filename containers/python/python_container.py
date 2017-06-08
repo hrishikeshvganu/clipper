@@ -7,68 +7,43 @@ import numpy as np
 np.set_printoptions(threshold=np.nan)
 
 sys.path.append(os.path.abspath("/lib/"))
-import pywrencloudpickle
+from clipper_admin import cloudpickle
+
+IMPORT_ERROR_RETURN_CODE = 3
 
 
 def load_predict_func(file_path):
     with open(file_path, 'r') as serialized_func_file:
-        return pywrencloudpickle.load(serialized_func_file)
+        return cloudpickle.load(serialized_func_file)
 
 
 class PythonContainer(rpc.ModelContainerBase):
     def __init__(self, path, input_type):
-        print("Initializing Python function container")
         self.input_type = rpc.string_to_input_type(input_type)
         predict_fname = "predict_func.pkl"
         predict_path = "{dir}/{predict_fname}".format(
             dir=path, predict_fname=predict_fname)
         self.predict_func = load_predict_func(predict_path)
-        print("Loaded prediction function")
 
     def predict_ints(self, inputs):
-        if self.input_type != rpc.INPUT_TYPE_INTS:
-            self._log_incorrect_input_type(rpc.INPUT_TYPE_INTS)
-            return
         preds = self.predict_func(inputs)
         return [str(p) for p in preds]
 
     def predict_floats(self, inputs):
-        if self.input_type != rpc.INPUT_TYPE_FLOATS:
-            self._log_incorrect_input_type(rpc.INPUT_TYPE_FLOATS)
-            return
         preds = self.predict_func(inputs)
         return [str(p) for p in preds]
 
     def predict_doubles(self, inputs):
-        if self.input_type != rpc.INPUT_TYPE_DOUBLES:
-            self._log_incorrect_input_type(rpc.INPUT_TYPE_DOUBLES)
-            return
         preds = self.predict_func(inputs)
         return [str(p) for p in preds]
 
     def predict_bytes(self, inputs):
-        if self.input_type != rpc.INPUT_TYPE_BYTES:
-            self._log_incorrect_input_type(rpc.INPUT_TYPE_BYTES)
-            return
         preds = self.predict_func(inputs)
         return [str(p) for p in preds]
 
     def predict_strings(self, inputs):
-        if self.input_type != rpc.INPUT_TYPE_STRINGS:
-            self._log_incorrect_input_type(rpc.INPUT_TYPE_STRINGS)
-            return
         preds = self.predict_func(inputs)
         return [str(p) for p in preds]
-
-    def _log_incorrect_input_type(self, input_type):
-        incorrect_input_type = rpc.input_type_to_string(input_type)
-        correct_input_type = rpc.input_type_to_string(self.input_type)
-        print(
-            "Attempted to use prediction function for input type {incorrect_input_type}.\
-            This model-container was configured accept data for input type {correct_input_type}"
-            .format(
-                incorrect_input_type=incorrect_input_type,
-                correct_input_type=correct_input_type))
 
 
 if __name__ == "__main__":
@@ -109,6 +84,15 @@ if __name__ == "__main__":
 
     model_path = os.environ["CLIPPER_MODEL_PATH"]
 
-    model = PythonContainer(model_path, input_type)
-    rpc_service = rpc.RPCService()
-    rpc_service.start(model, ip, port, model_name, model_version, input_type)
+    print("Initializing Python function container")
+    sys.stdout.flush()
+    sys.stderr.flush()
+
+    try:
+        model = PythonContainer(model_path, input_type)
+        rpc_service = rpc.RPCService()
+        rpc_service.start(model, ip, port, model_name, model_version,
+                          input_type)
+    except ImportError as e:
+        print(e)
+        sys.exit(IMPORT_ERROR_RETURN_CODE)

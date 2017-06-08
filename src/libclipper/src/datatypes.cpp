@@ -11,7 +11,10 @@
 namespace clipper {
 
 size_t versioned_model_hash(const VersionedModelId &key) {
-  return std::hash<std::string>()(key.first) ^ std::hash<int>()(key.second);
+  std::size_t seed = 0;
+  boost::hash_combine(seed, key.first);
+  boost::hash_combine(seed, key.second);
+  return seed;
 }
 
 std::string versioned_model_to_str(const VersionedModelId &model) {
@@ -302,12 +305,14 @@ Query::Query(std::string label, long user_id, std::shared_ptr<Input> input,
       create_time_(std::chrono::high_resolution_clock::now()) {}
 
 Response::Response(Query query, QueryId query_id, const long duration_micros,
-                   Output output, const bool output_is_default)
+                   Output output, const bool output_is_default,
+                   const boost::optional<std::string> default_explanation)
     : query_(std::move(query)),
       query_id_(query_id),
       duration_micros_(duration_micros),
       output_(std::move(output)),
-      output_is_default_(output_is_default) {}
+      output_is_default_(output_is_default),
+      default_explanation_(default_explanation) {}
 
 std::string Response::debug_string() const noexcept {
   std::string debug;
